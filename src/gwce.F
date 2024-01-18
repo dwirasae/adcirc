@@ -1029,6 +1029,7 @@ Corbitt 120322: Localized Advection
          QY1N1=QY1(NM1)
          QY1N2=QY1(NM2)
          QY1N3=QY1(NM3)
+
 !JLW: similar to the LHS, look up wet area fraction, grid averaged water
 !depth, and advection
          IF(level0)THEN
@@ -2509,6 +2510,7 @@ ckmd
             UV1=SQRT(UU1(I)*UU1(I)+VV1(I)*VV1(I))
             UV2=SQRT(UU2(I)*UU2(I)+VV2(I)*VV2(I))
             H00=DP(I)+IFNLFA*ETA0(I)
+
 C...........DMW202401 Use saved H1 and H2  
             TK0(I)=FRIC(I)*(IFLINBF + (UV0/H00)*(IFNLBF + IFHYBF*
      &           (1+(HBREAK/H00)**FTHETA)**(FGAMMA/FTHETA)))

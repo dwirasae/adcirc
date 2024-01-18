@@ -1376,6 +1376,7 @@ Corbitt 120322: Localized Advection
          V1N1=VV1(NM1)
          V1N2=VV1(NM2)
          V1N3=VV1(NM3)
+
 !JLW: add subgrid lookup
          IF(level0)THEN
             H1N1 = gridDepthEleETA1(IE,1)   
@@ -2034,23 +2035,23 @@ C...  Compute velocities
                   VV2(I)=QY2(I)/H2s
                ENDIF
             ELSE
-            IF(H2s.NE.0.) THEN
-               UU2(I)=QX2(I)/H2s
-               VV2(I)=QY2(I)/H2s
-               ELSE
-               WRITE(16,*) ''
-               WRITE(16,*) ''
-               WRITE(16,*) '*******************************************'
-               WRITE(16,*) '*******************************************'
-               WRITE(16,*) 'WARNING: Total water depth = 0 at node  ',I
-               WRITE(16,*) '         Velocities set = -999.'
-               WRITE(16,*) '*******************************************'
-               WRITE(16,*) '*******************************************'
-               WRITE(16,*) ''
-               WRITE(16,*) ''
-               UU2(I)=-999.
-               VV2(I)=-999.
-            ENDIF
+             IF(H2s.NE.0.) THEN
+                UU2(I)=QX2(I)/H2s
+                VV2(I)=QY2(I)/H2s
+                ELSE
+                WRITE(16,*) ''
+                WRITE(16,*) ''
+                WRITE(16,*) '*******************************************'
+                WRITE(16,*) '*******************************************'
+                WRITE(16,*) 'WARNING: Total water depth = 0 at node  ',I
+                WRITE(16,*) '         Velocities set = -999.'
+                WRITE(16,*) '*******************************************'
+                WRITE(16,*) '*******************************************'
+                WRITE(16,*) ''
+                WRITE(16,*) ''
+                UU2(I)=-999.
+                VV2(I)=-999.
+             ENDIF
             ENDIF
          ELSE
 C...........DMW202401 Use saved H2
