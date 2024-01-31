@@ -119,9 +119,9 @@ C.....sb46.28sb03 added 09/xx/2006
 c. RJW merged 08/26/2008 from Casey 071219:Added the following variables for 3D wet/dry.
       USE GLOBAL_3DVS, ONLY:
      &     A, B, BSX, BSY, EVTOT, ISLIP, KP, Q, SIGMA, Z0B,NFEN
-
 ! arash 1/20/2016
      &     , BPG
+      USE ADCIRC_Mod, ONLY: ITIME_BGN
 
 #ifdef CMPI
       USE MESSENGER
@@ -1061,7 +1061,7 @@ C...
 !----------------------SOLVE GWCE---------------------------------------
 C...
 C...  Compute new water surface elevation 
-      call solveGWCE(it, timeloc, timeh)
+      call solveGWCE(it, ITIME_BGN, timeloc, timeh)
 
 !---------------------END SOLVE GWCE------------------------------------
 
@@ -1092,6 +1092,9 @@ C...  Compute new water surface elevation
 C.....DMW202401 Add update for flow depth at current timestep
 C......We do this after wetting/drying since bathy could change with subgrid barriers.
       DO I = 1,NP
+         IF ((I.EQ.1).AND.(IT.EQ.ITIME_BGN)) THEN
+            WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS SECOND SAVE ON H2'
+         ENDIF
          H2(I) = DP(I)+IFNLFA*ETA2(I)
       ENDDO
 C...
@@ -1328,8 +1331,12 @@ C     output the global node number to debug the local PE fort.14s
            CALL MSG_FINI()                    !  if there are Error Elvation nodes.
            CALL EXIT(1)                             !
          ENDIF                                !st3
-#ifdef VELCHECK         
+         
          ErrorVelExceeded = 0                ! Clint's Zombie Slyaer
+         
+         IF (IT .EQ. ITIME_BGN) THEN
+            WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST CHECK FOR ERROR VELS'
+         ENDIF
          IF(VELMAX.GT.ErrorVel) THEN
          
             WRITE(ScreenUnit,3995)
@@ -1352,7 +1359,6 @@ C     output the global node number to debug the local PE fort.14s
            CALL MSG_FINI()                    !  if there are Error Velocity nodes.
            CALL EXIT(1)                             !
          ENDIF                                !st3
-#endif
 
 #else
          IF(ELMAX.LT.WarnElev.AND.ITEST.EQ.IT) THEN
@@ -1396,7 +1402,10 @@ C     output the global node number to debug the local PE fort.14s
      &           'ADCIRC stopping. **')
             CALL ADCIRC_Terminate()
          ENDIF
-#ifdef VELCHECK
+
+         IF (IT .EQ. ITIME_BGN) THEN
+            WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST CHECK FOR ERROR VELS'
+         ENDIF
          IF(VELMAX.GT.ErrorVel) THEN
             write(6,*) 'velmax, errorvel',velmax, errorvel 
             Flag_VelError = .true.
@@ -1412,13 +1421,15 @@ C     output the global node number to debug the local PE fort.14s
             CALL ADCIRC_Terminate()
          ENDIF
 #endif
-#endif
 
       ENDIF
-#ifdef VELCHECK
+
 C....DMW 20240109 - WARNING FOR NaNs IN VELOCITY SOLN
       foundNaN = .false.
-      DO I = 1,NP 
+      DO I = 1,NP
+         IF ((I.EQ.1).AND.(IT.EQ.ITIME_BGN)) THEN
+            WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST CHECK FOR NAN VELS'
+         ENDIF
          IF(ISNAN(UU2(I)).OR.ISNAN(VV2(I))) THEN
             foundNaN = .true.
             IF(NSCREEN.NE.0) THEN
@@ -1474,7 +1485,6 @@ C....DMW 20240109 - WARNING FOR NaNs IN VELOCITY SOLN
       call EarlyTermSum( earlyterminate )
 #endif
 
-#endif
 
 C...
 C...  ****************** TIME STEPPING LOOP ENDS HERE ********************
