@@ -165,7 +165,7 @@ c. RJW merged 08/26/2008 from Casey 071219:Added the following variables for 3D 
       REAL(8) :: velmax
       INTEGER :: errorElevExceeded
 C     DMW 202401 Check for Velocity exceeding error level
-      INTEGER :: errorVelExceeded
+      INTEGER :: warnVelExceeded
       INTEGER :: warnElevExceeded
       logical, save ::  EtaDisc_Fill = .TRUE.
 
@@ -1332,12 +1332,11 @@ C     output the global node number to debug the local PE fort.14s
            CALL EXIT(1)                             !
          ENDIF                                !st3
          
-         ErrorVelExceeded = 0                ! Clint's Zombie Slyaer
-         
+         WarnVelExceeded = 0                
          IF (IT .EQ. ITIME_BGN) THEN
-            WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST CHECK FOR ERROR VELS'
+            WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST CHECK FOR WARNING VELS'
          ENDIF
-         IF(VELMAX.GT.ErrorVel) THEN
+         IF(VELMAX.GT.WarnVel) THEN
          
             WRITE(ScreenUnit,3995)
      &           IT,NUMITR,TimeLoc,ETA2(KEMAX),NODES_LG(KEMAX),
@@ -1349,17 +1348,10 @@ C     output the global node number to debug the local PE fort.14s
      &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I9,
      &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I9,
      &           2X,'ON MYPROC = ',I4,/,
-     &           2X,'** ERROR: Velocity.gt.ErrorVel,',
-     &           ' ADCIRC stopping. **')
-            ErrorVelExceeded = 1                ! Clint's Zombie Slayer
-         ENDIF
-         call WarnElevSum(ErrorVelExceeded)  ! Clint's Zombie Slayer 2010.08.07
-         IF( ErrorVelExceeded /= 0 ) THEN    !  Finalize MPI Environment,
-           Flag_VelError = .true. 
-           CALL MSG_FINI()                    !  if there are Error Velocity nodes.
-           CALL EXIT(1)                             !
-         ENDIF                                !st3
-
+     &           2X,'** WARNING: Velocity.gt.WarnVel **')
+            WarnVelExceeded = 1                
+         ENDIF                        
+		 
 #else
          IF(ELMAX.LT.WarnElev.AND.ITEST.EQ.IT) THEN
             IF (KEMAX.GT.0) THEN
@@ -1406,9 +1398,7 @@ C     output the global node number to debug the local PE fort.14s
          IF (IT .EQ. ITIME_BGN) THEN
             WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST CHECK FOR ERROR VELS'
          ENDIF
-         IF(VELMAX.GT.ErrorVel) THEN
-            write(6,*) 'velmax, errorvel',velmax, errorvel 
-            Flag_VelError = .true.
+         IF(VELMAX.GT.WarnVel) THEN
             WRITE(ScreenUnit,3996)
      &           IT,NUMITR,TimeLoc,ETA2(KEMAX),KEMAX,VELMAX,KVMAX
             WRITE(16,3996) IT,NUMITR,TimeLoc,ETA2(KEMAX),KEMAX,VELMAX,KVMAX
@@ -1416,9 +1406,7 @@ C     output the global node number to debug the local PE fort.14s
      &           5X,'TIME = ',E15.8,
      &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I9,
      &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I9,/,
-     &           2X,'** ERROR: Velocity.gt.ErrorVel, '
-     &           'ADCIRC stopping. **')
-            CALL ADCIRC_Terminate()
+     &           2X,'** WARNING: Velocity.gt.WarnVel **')
          ENDIF
 #endif
 
