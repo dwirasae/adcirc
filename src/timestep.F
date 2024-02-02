@@ -221,8 +221,11 @@ C.......DMW202401 On first timestep, find H2 at start of timestepper since ETA2 
       ENDIF  
       
       IF (IT .EQ. 1) THEN
-C.......DMW202401 On first timestep, find H2 at start of timestepper since ETA2 = ETA1
+C.......DMW202401 On first timestep of a cold start, find H2 at start of timestepper since ETA2 = ETA1
         DO I = 1,NP
+           IF ((I.EQ.1)) THEN
+              WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST SAVE ON H2'
+           ENDIF
            H2(I) = DP(I)+IFNLFA*ETA2(I)
            H1(I) = H2(I)
         ENDDO
@@ -1331,7 +1334,8 @@ C     output the global node number to debug the local PE fort.14s
            CALL MSG_FINI()                    !  if there are Error Elvation nodes.
            CALL EXIT(1)                             !
          ENDIF                                !st3
-         
+
+#ifdef VELCHECK
          WarnVelExceeded = 0                
          IF (IT .EQ. ITIME_BGN) THEN
             WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST CHECK FOR WARNING VELS'
@@ -1350,7 +1354,8 @@ C     output the global node number to debug the local PE fort.14s
      &           2X,'ON MYPROC = ',I4,/,
      &           2X,'** WARNING: Velocity.gt.WarnVel **')
             WarnVelExceeded = 1                
-         ENDIF                        
+         ENDIF   
+#endif
 		 
 #else
          IF(ELMAX.LT.WarnElev.AND.ITEST.EQ.IT) THEN
@@ -1394,7 +1399,7 @@ C     output the global node number to debug the local PE fort.14s
      &           'ADCIRC stopping. **')
             CALL ADCIRC_Terminate()
          ENDIF
-
+#ifdef VELCHECK
          IF (IT .EQ. ITIME_BGN) THEN
             WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST CHECK FOR ERROR VELS'
          ENDIF
@@ -1410,8 +1415,11 @@ C     output the global node number to debug the local PE fort.14s
          ENDIF
 #endif
 
+#endif
+
       ENDIF
 
+#ifdef VELCHECK
 C....DMW 20240109 - WARNING FOR NaNs IN VELOCITY SOLN
       foundNaN = .false.
       DO I = 1,NP
@@ -1471,6 +1479,8 @@ C....DMW 20240109 - WARNING FOR NaNs IN VELOCITY SOLN
       ENDIF
 #ifdef CMPI
       call EarlyTermSum( earlyterminate )
+#endif
+
 #endif
 
 
