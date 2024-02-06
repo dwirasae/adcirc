@@ -1164,8 +1164,13 @@ C.....interface nodes.
       DO I = 1,NP
          ! WJP 02.24.2018 Performing the final solve
          DDU    = AUV(1,I)*AUV(2,I)-AUV(3,I)*AUV(4,I)
-         UU2(I) = (MOM_LV_X(I)*AUV(2,I)-MOM_LV_Y(I)*AUV(3,I))/DDU
-         VV2(I) = (MOM_LV_Y(I)*AUV(1,I)-MOM_LV_X(I)*AUV(4,I))/DDU
+         IF (NODECODE(I).EQ.1.AND.DDU.NE.0.D0) THEN
+            UU2(I) = (MOM_LV_X(I)*AUV(2,I)-MOM_LV_Y(I)*AUV(3,I))/DDU
+            VV2(I) = (MOM_LV_Y(I)*AUV(1,I)-MOM_LV_X(I)*AUV(4,I))/DDU
+         ELSEIF
+            UU2(I) = 0.D0
+            VV2(I) = 0.D0
+         ENDIF
 
 c        IF(MJU(I).NE.NODELE(I)) THEN !uncomment for essential
 c           UBAR2(I)=0.D0    !no slip and normal flux
@@ -1974,9 +1979,14 @@ C.....interface nodes.
 
       DO I=1,NP
          ! WJP 02.24.2018 Performing the final solve
-         DDU    = AUV(1,I)*AUV(2,I)-AUV(3,I)*AUV(4,I)
-         QX2(I) = (MOM_LV_X(I)*AUV(2,I)-MOM_LV_Y(I)*AUV(3,I))/DDU
-         QY2(I) = (MOM_LV_Y(I)*AUV(1,I)-MOM_LV_X(I)*AUV(4,I))/DDU
+             = AUV(1,I)*AUV(2,I)-AUV(3,I)*AUV(4,I)
+         IF (NODECODE(I).EQ.1.AND..NE.0.D0) THEN
+            QX2(I) = (MOM_LV_X(I)*AUV(2,I)-MOM_LV_Y(I)*AUV(3,I))/
+            QY2(I) = (MOM_LV_Y(I)*AUV(1,I)-MOM_LV_X(I)*AUV(4,I))/
+         ELSE
+            QX2(I) = 0.D0
+            QY2(I) = 0.D0
+         ENDIF
          
 c        IF(MJU(I).NE.NODELE(I)) THEN !uncomment for essential
 c           QX2(I)=0.D0    !no slip and normal flux
@@ -2126,7 +2136,7 @@ C
 
       REAL(8) BTP1N1, BTP1N2, BTP1N3, BTP2N1, BTP2N2, BTP2N3
       REAL(8) DBTPDXA, DBTPDYA
-      REAL(8) DDU
+      REAL(8) 
       REAL(8) DQX1DX, DQX1DY, DQY1DX, DQY1DY
       REAL(8) DU1DX, DU1DY, DV1DX, DV1DY
       REAL(8) DU1DXA, DU1DYA, DV1DXA, DV1DYA
@@ -2765,8 +2775,13 @@ C.....interface nodes.
          AUV22=AUV11(I)
          AUV21=-AUV12(I)
          DDU=AUV11(I)*AUV22-AUV12(I)*AUV21
-         UU2(I)=(MOM_LV_X(I)*AUV22-MOM_LV_Y(I)*AUV12(I))/DDU
-         VV2(I)=(MOM_LV_Y(I)*AUV11(I)-MOM_LV_X(I)*AUV21)/DDU
+         IF (NODECODE(I).EQ.1.AND.DDU.NE.0.D0) THEN
+            UU2(I)=(MOM_LV_X(I)*AUV22-MOM_LV_Y(I)*AUV12(I))/DDU
+            VV2(I)=(MOM_LV_Y(I)*AUV11(I)-MOM_LV_X(I)*AUV21)/DDU
+         ELSE
+            UU2(I) = 0.D0
+            VV2(I) = 0.D0
+         ENDIF
 
 c        IF(MJU(I).NE.NODELE(I)) THEN !uncomment for essential
 c           UBAR2(I)=0.D0    !no slip and normal flux
