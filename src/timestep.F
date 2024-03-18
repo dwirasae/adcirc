@@ -82,7 +82,7 @@ C
      &    BCFLAG_LNM, usingDynamicWaterLevelCorrection,
      &    dynamicWaterLevelCorrection1, dynamicWaterLevelCorrection2, L_N, TKM, 
      &    WarnElevDump, nodes_lg, NT, NM, NB, DEBUG, NHOUTONCE,
-     &    earlyterminate, IT_foundNaN, ErrorVel, Flag_VelError
+     &    earlyterminate, IT_foundNaN, Flag_VelError
 
       USE ADC_CONSTANTS, ONLY: rhoWat0, sigT0, waveWindMultiplier
       USE GWCE, ONLY : solveGWCE, numitr
@@ -210,15 +210,6 @@ C....... DW
 C.......
       LOGICAL ISFRONT
       LOGICAL foundNaN
-
-	  
-      IF (IT .EQ. 1) THEN
-C.......DMW202401 On first timestep, find H2 at start of timestepper since ETA2 = ETA1
-        DO I = 1,NP
-           H2(I) = DP(I)+IFNLFA*ETA2(I)
-           H1(I) = H2(I)
-        ENDDO
-      ENDIF  
       
       IF (IT .EQ. 1) THEN
 C.......DMW202401 On first timestep of a cold start, find H2 at start of timestepper since ETA2 = ETA1
