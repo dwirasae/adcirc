@@ -339,6 +339,7 @@ C!      ENDIF
       Biharmonic_viscosity_modified_Leith (:,:) = 0.0d0
 
       DO NH = 1, NP                      !loop over horizontal nodes
+
 C........DMW202401 Use saved H1 !Total depth at current timestep - 'center' node
          HsOAMB = H1(NH) / AMB
          ! begin the vertical loop

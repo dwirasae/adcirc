@@ -56,7 +56,7 @@ C
 #ifdef IEEE_DEBUG
       USE, INTRINSIC :: IEEE_ARITHMETIC
 #endif
-      USE SIZES, ONLY : MNP, MNWPROH
+      USE SIZES, ONLY : MNP, MNWPROH, MYPROC
       USE GLOBAL, ONLY : UU1, VV1, QX1, QY1, QX2, QY2, UU2, VV2, MOM_LV_X,
      &    MOM_LV_Y, WSX2, WSY2, PR1, PR2, TiP1, TiP2, UU0, VV0, QY0, 
      &    GWCE_LV, TRANS_LV_B, TRANS_LV_A, WSX1, WSY1, dp1, dp2, QN0, 
@@ -81,7 +81,9 @@ C
      &    QNPH, QNAM, ENPH, ENAM, ETRF, FPER, FFACE, ETA1, FAMIG, LNM_BC,
      &    BCFLAG_LNM, usingDynamicWaterLevelCorrection,
      &    dynamicWaterLevelCorrection1, dynamicWaterLevelCorrection2, L_N, TKM, 
-     &    WarnElevDump, nodes_lg, NT, NM, NB, DEBUG, NHOUTONCE
+     &    WarnElevDump, nodes_lg, NT, NM, NB, DEBUG, NHOUTONCE,
+     &    earlyterminate, IT_foundNaN, Flag_VelError
+
       USE ADC_CONSTANTS, ONLY: rhoWat0, sigT0, waveWindMultiplier
       USE GWCE, ONLY : solveGWCE, numitr
       USE MOMENTUM, ONLY : solveMomentumEq
@@ -89,7 +91,7 @@ C
       USE WRITE_OUTPUT, ONLY : writeOutput2D, writeHotStart, 
      &    writeWarnElev, collectInundationData, collectMinMaxData
       USE MESH, ONLY : NE, NP, DP, SLAM, SFEA, ICS, TotalArea,
-     &                  MJU, Areas, SFAC 
+     &                  MJU, Areas, SFAC, NNeigh, NeiTab
       USE BOUNDARIES, ONLY : NOPE, NETA, NBOU, NVEL, LBCODEI, NBV, SIII,
      &    NFLUXF, NFLUXB, NFLUXGBC, NFLUXIB, NFLUXIBP, NFLUXRBC, CSII,
      &    BARLANHT, BARLANCFSP, NVELL, IBCONN, BARINHT, BARINCFSP,
@@ -117,9 +119,9 @@ C.....sb46.28sb03 added 09/xx/2006
 c. RJW merged 08/26/2008 from Casey 071219:Added the following variables for 3D wet/dry.
       USE GLOBAL_3DVS, ONLY:
      &     A, B, BSX, BSY, EVTOT, ISLIP, KP, Q, SIGMA, Z0B,NFEN
-
 ! arash 1/20/2016
      &     , BPG
+      USE ADCIRC_Mod, ONLY: ITIME_BGN
 
 #ifdef CMPI
       USE MESSENGER
@@ -150,7 +152,7 @@ Casey 100205: Add a variable for writing of SWAN hot-start files.
       INTEGER, intent(in) :: IT
 C
 c. RJW merged 08/26/2008 from Casey 071219:Added the following variables for 3D wet/dry.
-      INTEGER IE, I, J, K                  !local loop counters
+      INTEGER IE, I, J, K, JJ                  !local loop counters
       INTEGER NM1, NM2, NM3
       INTEGER NC1, NC2, NC3, NCEle
       INTEGER NCyc, NA
@@ -162,6 +164,8 @@ c. RJW merged 08/26/2008 from Casey 071219:Added the following variables for 3D 
       REAL(8) :: vel
       REAL(8) :: velmax
       INTEGER :: errorElevExceeded
+C     DMW 202401 Check for Velocity exceeding error level
+      INTEGER :: warnVelExceeded
       INTEGER :: warnElevExceeded
       logical, save ::  EtaDisc_Fill = .TRUE.
 
@@ -205,10 +209,14 @@ C....... DW
       INTEGER:: NBDI, istep
 C.......
       LOGICAL ISFRONT
-	  
+      LOGICAL foundNaN
+      
       IF (IT .EQ. 1) THEN
-C.......DMW202401 On first timestep, find H2 at start of timestepper since ETA2 = ETA1
+C.......DMW202401 On first timestep of a cold start, find H2 at start of timestepper since ETA2 = ETA1
         DO I = 1,NP
+           IF ((I.EQ.1)) THEN
+              WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST SAVE ON H2'
+           ENDIF
            H2(I) = DP(I)+IFNLFA*ETA2(I)
            H1(I) = H2(I)
         ENDDO
@@ -1043,14 +1051,11 @@ C...
       if(subdomainOn.and.enforceBN.eq.1) call readFort019(it)  ! NCSU Subdomain
       if(subdomainOn.and.enforceBN.eq.2) call readFort020(it)  ! NCSU Subdomain
       if(subdomainOn.and.enforceBN.eq.2) call readFort021(it)  ! NCSU Subdomain
-      
-
-
 
 !----------------------SOLVE GWCE---------------------------------------
 C...
 C...  Compute new water surface elevation 
-      call solveGWCE(it, timeloc, timeh)
+      call solveGWCE(it, ITIME_BGN, timeloc, timeh)
 
 !---------------------END SOLVE GWCE------------------------------------
 
@@ -1077,10 +1082,13 @@ C...  Compute new water surface elevation
 
 !--------------------WETTING AND DRYING--------------------------------
       ENDIF
-	  
+ 
 C.....DMW202401 Add update for flow depth at current timestep
 C......We do this after wetting/drying since bathy could change with subgrid barriers.
       DO I = 1,NP
+         IF ((I.EQ.1).AND.(IT.EQ.ITIME_BGN)) THEN
+            WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS SECOND SAVE ON H2'
+         ENDIF
          H2(I) = DP(I)+IFNLFA*ETA2(I)
       ENDDO
 C...
@@ -1282,8 +1290,8 @@ C     output the global node number to debug the local PE fort.14s
      &           NODES_LG(KEMAX),VELMAX,NODES_LG(KVMAX),MYPROC
  1993       FORMAT(1X,'TIME STEP =',I8,5X,'ITERATIONS =',I5,
      &           5X,'TIME = ',E15.8,
-     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I8,
-     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I8,
+     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I9,
+     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I9,
      &           2X,'ON MYPROC = ',I4,
      &           3X,'** WARNING: Elevation.gt.WarnElev **')
             IF (WarnElevDump) WarnElevExceeded=1
@@ -1304,8 +1312,8 @@ C     output the global node number to debug the local PE fort.14s
      &           NODES_LG(KEMAX),VELMAX,NODES_LG(KVMAX),MYPROC
  1995       FORMAT(1X,'TIME STEP =',I8,5X,'ITERATIONS =',I5,
      &           5X,'TIME = ',E15.8,
-     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I8,
-     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I8,
+     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I9,
+     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I9,
      &           2X,'ON MYPROC = ',I4,/,
      &           2X,'** ERROR: Elevation.gt.ErrorElev,',
      &           ' ADCIRC stopping. **')
@@ -1317,6 +1325,29 @@ C     output the global node number to debug the local PE fort.14s
            CALL MSG_FINI()                    !  if there are Error Elvation nodes.
            CALL EXIT(1)                             !
          ENDIF                                !st3
+
+#ifdef VELCHECK
+         WarnVelExceeded = 0                
+         IF (IT .EQ. ITIME_BGN) THEN
+            WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST CHECK FOR WARNING VELS'
+         ENDIF
+         IF(VELMAX.GT.WarnVel) THEN
+         
+            WRITE(ScreenUnit,3995)
+     &           IT,NUMITR,TimeLoc,ETA2(KEMAX),NODES_LG(KEMAX),
+     &           VELMAX,NODES_LG(KVMAX),MYPROC
+            WRITE(16,3995) IT,NUMITR,TimeLoc,ETA2(KEMAX),
+     &           NODES_LG(KEMAX),VELMAX,NODES_LG(KVMAX),MYPROC
+ 3995       FORMAT(1X,'TIME STEP =',I8,5X,'ITERATIONS =',I5,
+     &           5X,'TIME = ',E15.8,
+     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I9,
+     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I9,
+     &           2X,'ON MYPROC = ',I4,/,
+     &           2X,'** WARNING: Velocity.gt.WarnVel **')
+            WarnVelExceeded = 1                
+         ENDIF   
+#endif
+		 
 #else
          IF(ELMAX.LT.WarnElev.AND.ITEST.EQ.IT) THEN
             IF (KEMAX.GT.0) THEN
@@ -1329,8 +1360,8 @@ C     output the global node number to debug the local PE fort.14s
  1992       FORMAT(1X,'TIME STEP =',I8,1x,F6.2,'% COMPLETE',
      &           5X,'ITERATIONS =',I5,
      &           5X,'TIME = ',E15.8,
-     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I8,
-     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I8)
+     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I9,
+     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I9)
          ENDIF
          IF(ELMAX.GT.WarnElev) THEN
             WRITE(ScreenUnit,1994)
@@ -1338,8 +1369,8 @@ C     output the global node number to debug the local PE fort.14s
             WRITE(16,1994) IT,NUMITR,TimeLoc,ETA2(KEMAX),KEMAX,VELMAX,KVMAX
  1994       FORMAT(1X,'TIME STEP =',I8,5X,'ITERATIONS =',I5,
      &           5X,'TIME = ',E15.8,
-     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I8,
-     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I8,
+     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I9,
+     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I9,
      &           2X,'** WARNING: Elevation.gt.WarnElev **')
 #ifdef DEBUG_WARN_ELEV
             IF (WarnElevDump) CALL WriteWarnElev(TimeLoc, IT)
@@ -1353,14 +1384,96 @@ C     output the global node number to debug the local PE fort.14s
             WRITE(16,1996) IT,NUMITR,TimeLoc,ETA2(KEMAX),KEMAX,VELMAX,KVMAX
  1996       FORMAT(1X,'TIME STEP =',I8,5X,'ITERATIONS =',I5,
      &           5X,'TIME = ',E15.8,
-     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I8,
-     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I8,/,
+     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I9,
+     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I9,/,
      &           2X,'** ERROR: Elevation.gt.ErrorElev, '
      &           'ADCIRC stopping. **')
             CALL ADCIRC_Terminate()
          ENDIF
+#ifdef VELCHECK
+         IF (IT .EQ. ITIME_BGN) THEN
+            WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST CHECK FOR ERROR VELS'
+         ENDIF
+         IF(VELMAX.GT.WarnVel) THEN
+            WRITE(ScreenUnit,3996)
+     &           IT,NUMITR,TimeLoc,ETA2(KEMAX),KEMAX,VELMAX,KVMAX
+            WRITE(16,3996) IT,NUMITR,TimeLoc,ETA2(KEMAX),KEMAX,VELMAX,KVMAX
+ 3996       FORMAT(1X,'TIME STEP =',I8,5X,'ITERATIONS =',I5,
+     &           5X,'TIME = ',E15.8,
+     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I9,
+     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I9,/,
+     &           2X,'** WARNING: Velocity.gt.WarnVel **')
+         ENDIF
 #endif
+
+#endif
+
       ENDIF
+
+#ifdef VELCHECK
+C....DMW 20240109 - WARNING FOR NaNs IN VELOCITY SOLN
+      foundNaN = .false.
+      DO I = 1,NP
+         IF ((I.EQ.1).AND.(IT.EQ.ITIME_BGN)) THEN
+            WRITE(16,*) 'dmw202401 THIS CODE IS NOW MAKING ITS FIRST CHECK FOR NAN VELS'
+         ENDIF
+         IF(ISNAN(UU2(I)).OR.ISNAN(VV2(I))) THEN
+            foundNaN = .true.
+            IF(NSCREEN.NE.0) THEN
+               WRITE(ScreenUnit,2993)
+     &              IT,NUMITR,TimeLoc,NODES_LG(I),
+     &              ETA2(I),DP(I),MYPROC
+               WRITE(16,2993) IT,NUMITR,TimeLoc,
+     &              NODES_LG(I),ETA2(I),DP(I),MYPROC
+ 2993          FORMAT(1X,'TIME STEP =',I8,5X,'ITERATIONS =',I5,
+     &              5X,'TIME = ',E15.8,
+     &              2X,'SPEED IS NaN AT NODE I =',I9,
+     &              /,2X,'ETA2(I) = ', 1pE12.4E3,
+     &              2X,'DP(I) = ', 1pE12.4E3,
+     &              2X,'ON MYPROC = ',I4)
+               DO J = 2,NNeigh(I)
+                  JJ = NeiTab(I,J)
+                  WRITE(ScreenUnit,2995) NODES_LG(JJ),ETA2(JJ),DP(JJ),               
+     &                 UU2(JJ),VV2(JJ),MYPROC
+              
+                  WRITE(16,2995) NODES_LG(JJ),ETA2(JJ),DP(JJ),
+     &                 UU2(JJ),VV2(JJ),MYPROC
+ 2995             FORMAT(1X,'AT NEIGHBOR NODE I =',I9,
+     &                 /,2X,'ETA2(I) = ', 1pE12.4E3,
+     &                 2X,'DP(I) = ', 1pE12.4E3,
+     &                 2X,'UU2(I) = ', 1pE12.4E3,
+     &                 2X,'VV2(I) = ', 1pE12.4E3,
+     &                 2X,'ON MYPROC = ',I4)
+               ENDDO
+            ENDIF
+         ENDIF
+      ENDDO
+      IF (foundNaN) THEN
+         IF(NSCREEN.NE.0) THEN
+            WRITE(ScreenUnit,2994)
+     &           IT,NUMITR,TimeLoc,ETA2(KEMAX),NODES_LG(KEMAX),
+     &           VELMAX,NODES_LG(KVMAX),MYPROC
+            WRITE(16,2994) IT,NUMITR,TimeLoc,ETA2(KEMAX),
+     &           NODES_LG(KEMAX),VELMAX,NODES_LG(KVMAX),MYPROC
+ 2994       FORMAT(1X,'TIME STEP =',I8,5X,'ITERATIONS =',I5,
+     &           5X,'TIME = ',E15.8,
+     &           /,2X,'ELMAX = ', 1pE12.4E3,' AT NODE ',I9,
+     &           2X,'SPEEDMAX = ',1pE12.4E3,' AT NODE ',I9,
+     &           2X,'ON MYPROC = ',I4,
+     &           3X,'** WARNING: Velocity is NaN **')
+         ENDIF
+      ENDIF
+      IF ((foundNaN).AND.(IT_foundNaN.EQ.0)) THEN
+         IT_foundNaN = IT
+      ELSEIF ((IT.EQ.IT_foundNaN + 20).AND.(IT_foundNaN.NE.0)) THEN
+         earlyterminate = 1
+      ENDIF
+#ifdef CMPI
+      call EarlyTermSum( earlyterminate )
+#endif
+
+#endif
+
 
 C...
 C...  ****************** TIME STEPPING LOOP ENDS HERE ********************
@@ -1394,6 +1507,7 @@ C
      &    trans_lv_a, soursin, uu1, vv1, ifnlfa, eta1, bedstr, tk,
      &    setmessagesource, unsetmessagesource, DEBUG,
      &    allMessage, H1
+
       USE ADC_CONSTANTS, ONLY: rhowat0
       USE MESH, ONLY : NE, NP, NM, DP, X, Y, AREAS, SFAC
       USE NodalAttributes, ONLY: EVC

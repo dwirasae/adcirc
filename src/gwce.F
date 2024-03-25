@@ -161,7 +161,7 @@ C        initialize parameter arrays needed by iterative solver
 C     Two mutually exclusive possibilities are (1)
 C     the conventional GWCE or (2) the predictor-corrector GWCE.
 !----------------------------------------------------------------------
-      subroutine solveGWCE(it, timeloc, timeh)
+      subroutine solveGWCE(it, ITIME_BGN, timeloc, timeh)
       use sizes, only : mnp
       use global, only : CGWCE_New, CPRECOR, ETA2, QX2, QY2, UU2, VV2
 #ifdef CMPI
@@ -171,14 +171,14 @@ C     the conventional GWCE or (2) the predictor-corrector GWCE.
       use momentum, only : mom_eqs_new_nc
       use nodalattributes, only : loadEleSlopeLim
       implicit none
-      integer, intent(in) :: it ! time step 
+      integer, intent(in) :: it, ITIME_BGN ! time step 
       real(8), intent(in) :: timeloc ! simulation time in seconds
       real(8), intent(in) :: timeh
 
 C       -------------PREDICTOR-CORRECTOR-GWCE---------------------------
 ckmd    Changed to include the predictor-corrector algorithm
       IF(CPRECOR) THEN
-         CALL GWCE_New(IT,TimeLoc,TimeH)
+         CALL GWCE_New(IT,ITIME_BGN,TimeLoc,TimeH)
 c...tcm added call for slope limiting         
          IF (LoadEleSlopeLim) THEN
             call check_slopes(it,TimeLoc)
@@ -209,7 +209,7 @@ C                         -OR-
 
 C      -------------------GWCE------------------------------------------
       IF(CGWCE_New) THEN
-         CALL GWCE_New(IT,TimeLoc,TimeH)
+         CALL GWCE_New(IT,ITIME_BGN,TimeLoc,TimeH)
 c.... tcm added call to slope limiter         
          IF (LoadEleSlopeLim) THEN
             call check_slopes(it,TimeLoc)
@@ -232,7 +232,7 @@ C    Re-written to conform to the ADCIRC Theory Report                        *
 C                                                                             *
 C                            r.l.  06/22/2005                                 *
 C******************************************************************************
-      SUBROUTINE GWCE_New(IT,TimeLoc,TimeH)
+      SUBROUTINE GWCE_New(IT,ITIME_BGN,TimeLoc,TimeH)
 C
 #ifdef IEEE_DEBUG
       USE, INTRINSIC :: IEEE_ARITHMETIC
@@ -294,7 +294,7 @@ C... SB
       IMPLICIT NONE
 
       INTEGER IE, JN, IJ, I, J, K, L                     !local loop counters
-      INTEGER IT
+      INTEGER IT, ITIME_BGN
       INTEGER NM1, NM2, NM3, NMI1, NMI2, NMI3, NMJ1, NMJ2, NMJ3
       INTEGER NC1, NC2, NC3, NCEle, NCI, NCJ
       INTEGER NCyc
@@ -1029,6 +1029,7 @@ Corbitt 120322: Localized Advection
          QY1N1=QY1(NM1)
          QY1N2=QY1(NM2)
          QY1N3=QY1(NM3)
+
 !JLW: similar to the LHS, look up wet area fraction, grid averaged water
 !depth, and advection
          IF(level0)THEN
@@ -1552,10 +1553,10 @@ C...     Spatially varying Tau0 terms
      &        +Tau0SpaVar
 C
 C..... DW: begin
-     &        +(OnDiag*E0N1 + OffDiag*(E0N2+E0N3))*MsFacR_S
-     &        +(onDiag*ESAN1 + OffDiag*(ESAN2+ESAN3))*MsFacRS_T
-     &        +(onDiag*ABC00_EAN1 + 
-     &                OffDiag*(ABC00_EAN2 + ABC00_EAN3))*MsFacRS_ABC00
+     &        +(OnDiag*E0N1*SPM1 + OffDiag*(E0N2*SPM2+E0N3*SPM3))*MsFacR_S
+     &        +(onDiag*ESAN1*SPM1 + OffDiag*(ESAN2*SPM2+ESAN3*SPM3))*MsFacRS_T
+     &        +(onDiag*ABC00_EAN1*SPM1 + 
+     &                OffDiag*(ABC00_EAN2*SPM2 + ABC00_EAN3*SPM3))*MsFacRS_ABC00
 C..... END DW
 C
 
@@ -1578,10 +1579,10 @@ C...     Spatially varying Tau0 terms
      &        +Tau0SpaVar 
 C
 C..... DW: begin
-     &        +(OnDiag*E0N2 + OffDiag*(E0N1+E0N3))*MsFacR_S
-     &        +(onDiag*ESAN2 + OffDiag*(ESAN1+ESAN3))*MsFacRS_T
-     &        +(onDiag*ABC00_EAN2 + 
-     &                 OffDiag*(ABC00_EAN1 + ABC00_EAN3))*MsFacRS_ABC00
+     &        +(OnDiag*E0N2*SPM2 + OffDiag*(E0N1*SPM1+E0N3*SPM3))*MsFacR_S
+     &        +(onDiag*ESAN2*SPM2 + OffDiag*(ESAN1*SPM1+ESAN3*SPM3))*MsFacRS_T
+     &        +(onDiag*ABC00_EAN2*SPM2 + 
+     &                 OffDiag*(ABC00_EAN1*SPM1 + ABC00_EAN3*SPM3))*MsFacRS_ABC00
 C..... END DW
 C
 
@@ -1606,10 +1607,10 @@ C...     Spatially varying Tau0 terms
      &        +Tau0SpaVar
 C
 C..... DW: begin, absorbing layer
-     &        +(OnDiag*E0N3 + OffDiag*(E0N1+E0N2))*MsFacR_S
-     &        +(OnDiag*ESAN3 + OffDiag*(ESAN1+ESAN2))*MsFacRS_T
-     &        +(OnDiag*ABC00_EAN3 + 
-     &               OffDiag*(ABC00_EAN1 + ABC00_EAN2))*MsFacRS_ABC00
+     &        +(OnDiag*E0N3*SPM3 + OffDiag*(E0N1*SPM1+E0N2*SPM1))*MsFacR_S
+     &        +(OnDiag*ESAN3*SPM3 + OffDiag*(ESAN1*SPM1+ESAN2*SPM2))*MsFacRS_T
+     &        +(OnDiag*ABC00_EAN3*SPM3 + 
+     &               OffDiag*(ABC00_EAN1*SPM1 + ABC00_EAN2*SPM2))*MsFacRS_ABC00
 C..... END DW
 C
 
@@ -2509,6 +2510,7 @@ ckmd
             UV1=SQRT(UU1(I)*UU1(I)+VV1(I)*VV1(I))
             UV2=SQRT(UU2(I)*UU2(I)+VV2(I)*VV2(I))
             H00=DP(I)+IFNLFA*ETA0(I)
+
 C...........DMW202401 Use saved H1 and H2  
             TK0(I)=FRIC(I)*(IFLINBF + (UV0/H00)*(IFNLBF + IFHYBF*
      &           (1+(HBREAK/H00)**FTHETA)**(FGAMMA/FTHETA)))
