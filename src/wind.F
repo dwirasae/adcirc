@@ -37,7 +37,8 @@ C
      &                      rhoWat0, Rearth, rhoAir, one2ten,
      &                      windReduction
 #ifdef CMPI
-      use messenger, only : msg_fini
+      use mpi
+      use messenger, only : msg_fini, msg_Rscalar_Reduce
 #endif
 #ifdef DATETIME
       use datetime_module, only: datetime, timedelta, strptime
@@ -290,6 +291,11 @@ C
         END FUNCTION p_computeWindDrag
       END INTERFACE
       PROCEDURE(p_computeWindDrag),POINTER :: f_computeWindDrag => null()
+
+
+      ! for record time  
+      REAL(8), private:: read_io_wall_time, io_elapsed_time = 0.0D0   
+   
 
 C------------------------end of data declarations-----------------------
       CONTAINS
@@ -9207,11 +9213,18 @@ C----------------------------------------------------------------------
       real(8),intent(out),optional :: CICE2(NP)
       integer :: i, NTkeep
       real,allocatable,dimension(:,:) :: Pmsl, U10, V10, Cice
+
+      !
+      REAL(8):: start_time = 0.0, end_time = 0.0
+
       CALL setMessageSource('NWS14GET')
       ! Show the date in str_date format
       call logMessage(ECHO,'CurDT strng: '//
      &                CurDT%strftime("%Y-%m-%d %H:%M"))
       
+#ifdef CMPI
+      start_time = MPI_WTIME() ;       
+#endif      
       ! Get the Pressure
       !':PRMSL:mean sea level:'
       call READNWS14(Pfile,Pmsl,Pinv,Pvar,PfileNCID)
@@ -9229,23 +9242,12 @@ C----------------------------------------------------------------------
          NT = NTkeep
       endif
 
-!      ! Get the Pressure
-!      !':PRMSL:mean sea level:'
-!      call READNWS14(Pfile,Pinv,Pvar,Pmsl)
-!
-!      ! Get the U-winds
-!      call READNWS14(Wfile,Winv,Uvar,U10)
-!
-!      ! Get the V-winds
-!      call READNWS14(Wfile1,Winv,Vvar,V10)
-!
-!      ! Get the ice concentration if required
-!      if (present(CICE2)) then
-!         NTkeep = NT; NT = NTC
-!         call READNWS14(Cfile,Cinv,Cvar,Cice)
-!         NT = NTkeep
-!      endif      
-
+#ifdef CMPI
+      end_time = MPI_WTIME() ;       
+#endif   
+      io_elapsed_time = io_elapsed_time + 
+     &  ( end_time - start_time )      
+         
       ! Doing the interpolation from their grid to ours
       do i = 1,np
          if (indp(1,1,i) < 0) then
@@ -9453,7 +9455,7 @@ C----------------------------------------------------------------------
       use wgrib2api
 #endif
       USE GL2LOC_MAPPING ,ONLY : BcastToLocal_2DRealArray, 
-     &                           BcastToLocal_Int
+     &                           bcastToLocal_Int
       USE SIZES, ONLY : MYPROC
       implicit none
       integer :: iret, iter
@@ -9719,6 +9721,45 @@ C-----------------------------------------------------------------------
 #endif
 C.....END WJP (NWS = 14) ..............................................
 #endif
+
+
+C......................................................................
+      SUBROUTINE collect_wind_io_wall_time()
+         USE SIZES, ONLY: MYPROC, MNPROC
+
+         IMPLICIT NONE
+
+         REAL (8):: read_io_max_rank, read_io_min_rank
+         REAL (8):: max_wall_time, min_wall_time, sum_wall_time
+#ifdef CMPI
+         read_io_max_rank = DBLE(MYPROC)
+         read_io_min_rank = DBLE(MYPROC) 
+
+         CALL MSG_RScalar_Reduce( 'MAX', io_elapsed_time, 
+     &        max_wall_time, read_io_max_rank )
+
+         CALL MSG_RScalar_Reduce( 'MIN', io_elapsed_time, 
+     &        min_wall_time, read_io_min_rank )
+
+         CALL MSG_RScalar_Reduce( 'SUM', io_elapsed_time,
+     &        sum_wall_time ) ;
+
+         IF ( MYPROC == 0 ) THEN
+          OPEN( UNIT = 825, FILE = 'nws20_gross_io_report.out', 
+     &          ACTION="write") ;
+
+          WRITE( 825, '(A)') '% max_io max_rank min_io'// 
+     &                'min_rank avg_io' 
+          WRITE( 825, '(F19.5,1X,I6,1X,F19.5,I6,1X,F19.5)' )
+     &       max_wall_time, INT(read_io_max_rank), min_wall_time,
+     &       INT(read_io_min_rank), sum_wall_time/DBLE(MNPROC) 
+          CLOSE(825) ;
+         END IF     
+
+#endif
+
+      END SUBROUTINE collect_wind_io_wall_time
+C----------------------------------------------------------------------
 
 C-----------------------------------------------------------------------
 C     S U B R O U T I N E   W I N D L I M I T E R 
