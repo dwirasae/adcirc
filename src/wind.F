@@ -274,6 +274,9 @@ C
       logical :: grb2flag
       integer :: NT, NTC
 #endif
+
+      logical:: read_NWS14_using_core_0 = .true. ! read NWS14 (grib2,netcdf) from a computed core 0
+ 
       real(8) :: wtime1_12 ! time associated with previous met dataset
       real(8) :: wtime2_12 ! time associated with new met dataset
       real(8) :: wtiminc_12 ! time increment between met datasets (seconds)
@@ -9400,22 +9403,38 @@ C----------------------------------------------------------------------
       INTEGER,INTENT(IN) :: NC_ID
       integer :: i, Temp_ID, Lat_ID, Lon_ID, NX, NY
       CALL setMessageSource('READNWS14_netCDF')
+
 #ifdef ADCNETCDF
-      IF (MYPROC.EQ.0) THEN
-         call Check_err(NF90_INQ_DIMID(NC_ID,Latdim,Temp_ID))
-         call Check_err(NF90_INQUIRE_DIMENSION(NC_ID,Temp_ID,len=NY))
-         call Check_err(NF90_INQ_DIMID(NC_ID,Londim,Temp_ID))
-         call Check_err(NF90_INQUIRE_DIMENSION(NC_ID,Temp_ID,len=NX))
-      ENDIF
-      CALL BcastToLocal_Int(NX)
-      CALL BcastToLocal_Int(NY)
-      allocate(data2(NX,NY))
-      IF (MYPROC.EQ.0) THEN
-         call Check_err(NF90_INQ_VARID(NC_ID,var,Temp_ID))
-         call Check_err(NF90_GET_VAR(NC_ID,Temp_ID,data2,
+      IF ( read_NWS14_using_core_0 ) THEN
+        ! Use core zero to read data
+        ! and then broadcast them 
+        IF (MYPROC.EQ.0) THEN
+           call Check_err(NF90_INQ_DIMID(NC_ID,Latdim,Temp_ID))
+           call Check_err(NF90_INQUIRE_DIMENSION(NC_ID,Temp_ID,len=NY))
+           call Check_err(NF90_INQ_DIMID(NC_ID,Londim,Temp_ID))
+           call Check_err(NF90_INQUIRE_DIMENSION(NC_ID,Temp_ID,len=NX))
+        ENDIF
+        CALL BcastToLocal_Int(NX)
+        CALL BcastToLocal_Int(NY)
+        allocate(data2(NX,NY))
+        IF (MYPROC.EQ.0) THEN
+           call Check_err(NF90_INQ_VARID(NC_ID,var,Temp_ID))
+           call Check_err(NF90_GET_VAR(NC_ID,Temp_ID,data2,
+     &                  start=[1, 1, NT],count=[NX, NY, 1]))
+        ENDIF
+        CALL BCastToLocal_2DRealArray(Data2,NX,NY)
+      ELSE 
+        ! Each core read data 
+        call Check_err(NF90_INQ_DIMID(NC_ID,Latdim,Temp_ID))
+        call Check_err(NF90_INQUIRE_DIMENSION(NC_ID,Temp_ID,len=NY))
+        call Check_err(NF90_INQ_DIMID(NC_ID,Londim,Temp_ID))
+        call Check_err(NF90_INQUIRE_DIMENSION(NC_ID,Temp_ID,len=NX))
+
+        call Check_err(NF90_INQ_VARID(NC_ID,var,Temp_ID))
+        call Check_err(NF90_GET_VAR(NC_ID,Temp_ID,data2,
      &                  start=[1, 1, NT],count=[NX, NY, 1]))
       ENDIF
-      CALL BCastToLocal_2DRealArray(Data2,NX,NY)
+
 #endif
       CALL unsetMessageSource()
       RETURN
