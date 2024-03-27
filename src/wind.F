@@ -297,7 +297,7 @@ C
 
 
       ! for record time  
-      REAL(8), private:: read_io_wall_time, io_elapsed_time = 0.0D0   
+      REAL(8), private:: io_elapsed_time = 0.0D0   
    
 
 C------------------------end of data declarations-----------------------
@@ -8937,23 +8937,44 @@ C----------------------------------------------------------------------
          Uvar = 'dmy'
          Vvar = 'dmy'
          Cvar = 'dmy'
-#ifdef ADCNETCDF
-#ifdef CMPI
-         IF (MYPROC.EQ.0) THEN
+!#ifdef ADCNETCDF ! BEG ADCNETCDF
+!
+!#ifdef CMPI
+!         IF (MYPROC.EQ.0) THEN
+!#endif
+!            call Check_err(NF90_OPEN(Pfile,nf90_nowrite,PfileNCID))
+!            call Check_err(NF90_OPEN(Wfile,nf90_nowrite,WfileNCID))
+!            call Check_err(NF90_OPEN(Wfile1,nf90_nowrite,Wfile1NCID))
+!            IF (NCICE.EQ.14) THEN
+!               call Check_err(NF90_OPEN(Cfile,nf90_nowrite,CfileNCID))
+!            ENDIF
+!#ifdef CMPI
+!         ENDIF
+!         ! wait til proc 0 has opened all the files
+!         CALL MSG_BARRIER()
+!#endif
+!#endif
+
+
+#ifdef ADCNETCDF ! BEGIN ADCNETCDF
+         IF ( read_NWS14_using_core_0 ) THEN
+           IF ( MYPROC .EQ. 0 ) THEN
+             call Check_err(NF90_OPEN(Pfile,nf90_nowrite,PfileNCID))
+             call Check_err(NF90_OPEN(Wfile,nf90_nowrite,WfileNCID))
+             call Check_err(NF90_OPEN(Wfile1,nf90_nowrite,Wfile1NCID))
+             IF (NCICE.EQ.14) THEN
+                call Check_err(NF90_OPEN(Cfile,nf90_nowrite,CfileNCID))
+             ENDIF
+           END IF
+#ifdef CMPI         
+           ! wait til proc 0 has opened all the files
+           CALL MSG_BARRIER()
 #endif
-            call Check_err(NF90_OPEN(Pfile,nf90_nowrite,PfileNCID))
-            call Check_err(NF90_OPEN(Wfile,nf90_nowrite,WfileNCID))
-            call Check_err(NF90_OPEN(Wfile1,nf90_nowrite,Wfile1NCID))
-            IF (NCICE.EQ.14) THEN
-               call Check_err(NF90_OPEN(Cfile,nf90_nowrite,CfileNCID))
-            ENDIF
-#ifdef CMPI
-         ENDIF
-         ! wait til proc 0 has opened all the files
-         CALL MSG_BARRIER()
-#endif
-#endif
-         RETURN
+         END IF
+
+#endif ! END ADCNETCDF
+
+         RETURN 
       ELSE
          ! should be unreachable
          CALL windTerminate()
@@ -8961,7 +8982,7 @@ C----------------------------------------------------------------------
 C----------------------------------------------------------------------
       END SUBROUTINE NWS14SET_FILENAMES
 C----------------------------------------------------------------------
-C----------------------------------------------------------------------
+
       SUBROUTINE NWS14GRB2_MAKE_INV()
 C----------------------------------------------------------------------
 C     CPB 10/2023: This subroutine makes the .inv files for grib2
@@ -9227,7 +9248,8 @@ C----------------------------------------------------------------------
       
 #ifdef CMPI
       start_time = MPI_WTIME() ;       
-#endif      
+#endif  
+       
       ! Get the Pressure
       !':PRMSL:mean sea level:'
       call READNWS14(Pfile,Pmsl,Pinv,Pvar,PfileNCID)
@@ -9315,9 +9337,9 @@ C----------------------------------------------------------------------
       CHARACTER(LEN=200),INTENT(IN) :: fileN
       REAL,ALLOCATABLE,INTENT(OUT) :: data2(:,:)
       CHARACTER(LEN=200),INTENT(IN) :: invN, var
-      INTEGER,INTENT(IN) :: ncid
+      INTEGER,INTENT(INOUT) :: ncid
       IF (.NOT.grb2flag) THEN
-         CALL READNWS14_netCDF(ncid, var, data2)
+         CALL READNWS14_netCDF(fileN, ncid, var, data2)
       ELSEIF (grb2flag) THEN
          CALL READNWS14_grib2(fileN, invN, var, data2)
       ELSE
@@ -9386,7 +9408,7 @@ C----------------------------------------------------------------------
       END SUBROUTINE READNWS14_grib2
 C----------------------------------------------------------------------
 C----------------------------------------------------------------------
-      SUBROUTINE READNWS14_netCDF(NC_ID,var,data2)
+      SUBROUTINE READNWS14_netCDF(fileN, NC_ID,var,data2)
 C----------------------------------------------------------------------
 C       CPB 10/2023: Reads in netCDF format met forcing for NWS = 14.
 C       NOTE: reads in on Proc 0 and broadcasts.
@@ -9398,10 +9420,13 @@ C----------------------------------------------------------------------
      &                           BcastToLocal_Int
       USE SIZES, ONLY : MYPROC
       implicit none
+
+      character(len=*),intent(in):: fileN
       character(len=200),intent(in) :: var
       real,allocatable,intent(out) :: data2(:,:) 
-      INTEGER,INTENT(IN) :: NC_ID
+      INTEGER,INTENT(INOUT) :: NC_ID
       integer :: i, Temp_ID, Lat_ID, Lon_ID, NX, NY
+
       CALL setMessageSource('READNWS14_netCDF')
 
 #ifdef ADCNETCDF
@@ -9413,7 +9438,7 @@ C----------------------------------------------------------------------
            call Check_err(NF90_INQUIRE_DIMENSION(NC_ID,Temp_ID,len=NY))
            call Check_err(NF90_INQ_DIMID(NC_ID,Londim,Temp_ID))
            call Check_err(NF90_INQUIRE_DIMENSION(NC_ID,Temp_ID,len=NX))
-        ENDIF
+        ENDIF        
         CALL BcastToLocal_Int(NX)
         CALL BcastToLocal_Int(NY)
         allocate(data2(NX,NY))
@@ -9424,15 +9449,19 @@ C----------------------------------------------------------------------
         ENDIF
         CALL BCastToLocal_2DRealArray(Data2,NX,NY)
       ELSE 
-        ! Each core read data 
+        ! Each core read data
+        call Check_err(NF90_OPEN(fileN,nf90_nowrite,NC_ID)) 
         call Check_err(NF90_INQ_DIMID(NC_ID,Latdim,Temp_ID))
         call Check_err(NF90_INQUIRE_DIMENSION(NC_ID,Temp_ID,len=NY))
         call Check_err(NF90_INQ_DIMID(NC_ID,Londim,Temp_ID))
         call Check_err(NF90_INQUIRE_DIMENSION(NC_ID,Temp_ID,len=NX))
 
+        allocate(data2(NX,NY))
         call Check_err(NF90_INQ_VARID(NC_ID,var,Temp_ID))
         call Check_err(NF90_GET_VAR(NC_ID,Temp_ID,data2,
      &                  start=[1, 1, NT],count=[NX, NY, 1]))
+
+        call Check_err(NF90_CLOSE(NC_ID))
       ENDIF
 
 #endif
@@ -9452,7 +9481,7 @@ C----------------------------------------------------------------------
       CHARACTER(len=200),INTENT(IN) :: fileN
       REAL,ALLOCATABLE,INTENT(OUT) :: lat(:,:),lon(:,:)
       CHARACTER(LEN=200),INTENT(IN),OPTIONAL :: var, invN
-      INTEGER,INTENT(IN),OPTIONAL :: ncid
+      INTEGER,INTENT(INOUT),OPTIONAL :: ncid
       IF (grb2flag) THEN
          CALL READNWS14LatLon_grib2(fileN,invN,var,lat,lon)
       ELSEIF (.NOT.grb2flag) THEN
@@ -9538,13 +9567,18 @@ C----------------------------------------------------------------------
      &                           BcastToLocal_Int
       USE SIZES, ONLY : MYPROC
       implicit none
-      INTEGER,INTENT(IN) :: ncid ! already opened ncid tag
+      INTEGER,INTENT(INOUT) :: ncid ! already opened ncid tag
       character(len=200),intent(in) :: fileN
       real,allocatable,intent(out) :: lat(:,:), lon(:,:)
       integer :: i, Temp_ID, Lat_ID, Lon_ID, NX, NY, ndims
       CALL setMessageSource("READNWS14LatLon_netCDF")
 #ifdef ADCNETCDF
       IF (MYPROC.EQ.0) THEN
+              
+         IF ( .NOT. read_NWS14_using_core_0 ) THEN
+           call Check_err(NF90_OPEN(FileN,nf90_nowrite,ncid))  
+         END IF      
+                
          call Check_err(NF90_INQ_DIMID(ncid,Latdim,Temp_ID))
          call Check_err(NF90_INQUIRE_DIMENSION(ncid,Temp_ID,
      &                                         len=NY))
@@ -9574,6 +9608,11 @@ C----------------------------------------------------------------------
                lon(:,i) = lon(:,1)
             enddo
          endif
+
+         IF ( .NOT. read_NWS14_using_core_0 ) THEN 
+           call Check_err(NF90_CLOSE(ncid))  
+         END IF
+
       ENDIF
       CALL BcastToLocal_Int(NX)
       CALL BcastToLocal_Int(NY)
@@ -9602,7 +9641,7 @@ C----------------------------------------------------------------------
       USE SIZES, ONLY : MYPROC
       implicit none
       integer :: iret, iter
-      INTEGER,INTENT(IN) :: NC_ID
+      INTEGER,INTENT(INOUT) :: NC_ID
       character(len=200),intent(in) :: fileN
       character(len=19),allocatable :: TimeStr(:) 
       character(len=200) :: str_date
@@ -9610,13 +9649,21 @@ C----------------------------------------------------------------------
       ! CPB 4/20/2023
       REAL(8),ALLOCATABLE :: NCTIMES(:)
       CALL setMessageSource('READNWS14_NC_StaTime')
+
+     
 #ifdef ADCNETCDF
 #ifdef CMPI
       IF (MYPROC.EQ.0) THEN
 #endif
+
+         IF ( .NOT. read_NWS14_using_core_0 ) THEN
+            call Check_err(NF90_OPEN(FileN,nf90_nowrite,NC_ID))  
+         END IF     
+
          call Check_err(NF90_INQ_DIMID(NC_ID,Tdim,Temp_ID))
          call Check_err(NF90_INQUIRE_DIMENSION(NC_ID,Temp_ID,
      &                                         len=TL))
+         
          IF (Tformat(1:1).eq.'%') THEN
             ! in this case the netCDF files have a datetime variable
             ! so we can determine where to start based off of that
@@ -9663,12 +9710,18 @@ C----------------------------------------------------------------------
             NT = 1 
          endif
          NTC = NT
+
+         IF ( .NOT. read_NWS14_using_core_0 ) THEN
+            call Check_err(NF90_CLOSE(NC_ID))  
+         END IF
+
 #ifdef CMPI
       endif
       CALL BcastToLocal_Int(NT)
       CALL BcastToLocal_Int(NTC)
 #endif
 #endif
+
       CALL unsetMessageSource()
       return
 C----------------------------------------------------------------------
@@ -9741,6 +9794,39 @@ C-----------------------------------------------------------------------
 C.....END WJP (NWS = 14) ..............................................
 #endif
 
+C--------------------------------------------------------------------- 
+      SUBROUTINE CLOSE_MET_FILES()
+        use global, only: NWS, NCICE
+        USE SIZES, ONLY : MYPROC
+    
+#ifdef ADCNETCDF
+        use netcdf
+#endif
+
+        IMPLICIT NONE
+
+#ifdef DATATIME        
+#ifdef ADCNETCDF
+        IF ( NWS == 14 ) THEN
+          IF ( read_NWS14_using_core_0 )  THEN   
+             IF ( MYPROC == 0 ) THEN     
+               call Check_err(NF90_CLOSE(PfileNCID))
+               call Check_err(NF90_CLOSE(WfileNCID))
+               call Check_err(NF90_CLOSE(Wfile1NCID))
+
+               IF (NCICE.EQ.14) THEN
+                  call Check_err(NF90_CLOSE(CfileNCID))
+               ENDIF
+             ENDIF
+          END IF 
+        END IF
+#endif
+#endif        
+
+        RETURN ;
+      END SUBROUTINE CLOSE_MET_FILES        
+C---------------------------------------------------------------------
+
 
 C......................................................................
       SUBROUTINE collect_wind_io_wall_time()
@@ -9750,6 +9836,7 @@ C......................................................................
 
          REAL (8):: read_io_max_rank, read_io_min_rank
          REAL (8):: max_wall_time, min_wall_time, sum_wall_time
+        
 #ifdef CMPI
          read_io_max_rank = DBLE(MYPROC)
          read_io_min_rank = DBLE(MYPROC) 
@@ -9764,11 +9851,15 @@ C......................................................................
      &        sum_wall_time ) ;
 
          IF ( MYPROC == 0 ) THEN
-          OPEN( UNIT = 825, FILE = 'nws20_gross_io_report.out', 
+          OPEN( UNIT = 825, FILE = 'nws14_io_report.out', 
      &          ACTION="write") ;
 
-          WRITE( 825, '(A)') '% max_io max_rank min_io'// 
-     &                'min_rank avg_io' 
+          WRITE( 825, '(A)' ) "% Time (in second) spent in Reading"//
+     &              " (& communication) netcdf/grib2 file."
+          WRITE( 825, '(A,L)') '% Use core 0 to read = ',
+     &                 read_NWS14_using_core_0 ; 
+          WRITE( 825, '(A)') '% max_io_time, max_rank, min_io_time,'// 
+     &                ' min_rank, average_io_time' 
           WRITE( 825, '(F19.5,1X,I6,1X,F19.5,I6,1X,F19.5)' )
      &       max_wall_time, INT(read_io_max_rank), min_wall_time,
      &       INT(read_io_min_rank), sum_wall_time/DBLE(MNPROC) 

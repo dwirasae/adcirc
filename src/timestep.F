@@ -100,7 +100,8 @@ C
       USE HARM, ONLY : updateHarmonicAnalysis
       USE WIND, ONLY : getMeteorologicalForcing, PRBCKGRND_MH2O, rsget,
      &    getdynamicWaterLevelCorrections, 
-     &    collect_wind_io_wall_time      
+     &    collect_wind_io_wall_time,
+     &    CLOSE_MET_FILES      
       USE ADCIRC_MOD, ONLY : ADCIRC_Terminate
 C.... TCM V49.64.01 ADDITIONS FOR ICE
       USE OWI_ICE,ONLY : NCICE1_INIT,NCICE1_GET
@@ -1486,8 +1487,11 @@ C         CALL MASSBAL3D(IT)
 C      ENDIF
 
       IF ( IT == NT ) THEN
+        ! collect and record io_time !      
         CALL collect_wind_io_wall_time( ) 
-        !c  record io  c!
+        
+        ! close NWS14 NetCdf files !
+        CALL CLOSE_MET_FILES() ; 
       END IF        
 
 #if defined(TIMESTEP_TRACE) || defined(ALL_TRACE)
