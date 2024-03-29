@@ -9885,6 +9885,9 @@ C......................................................................
 #ifdef CMPI
          read_io_max_rank = DBLE(MYPROC)
          read_io_min_rank = DBLE(MYPROC) 
+         
+         nws_read_io_max_rank = DBLE(MYPROC)
+         nws_read_io_min_rank = DBLE(MYPROC)
 
          CALL MSG_RScalar_Reduce( 'MAX', io_elapsed_time, 
      &        max_wall_time, read_io_max_rank )
