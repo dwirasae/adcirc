@@ -9911,7 +9911,7 @@ C......................................................................
 
           WRITE( 825, '(A)' ) "% Time (in second) spent in met'//
      &            ' forcing subroutines."
-          WRITE( 825, '(A,I5)') 'NWS = ', NWS
+          WRITE( 825, '(A,I5)') '% NWS = ', NWS
           IF ( NWS == 14 ) THEN
              WRITE( 825, '(A,L)') '% Use core 0 to read = ',
      &                 read_NWS14_using_core_0 
