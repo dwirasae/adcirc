@@ -9909,8 +9909,8 @@ C......................................................................
           OPEN( UNIT = 825, FILE = 'nws_io_report.out', 
      &          ACTION="write") ;
 
-          WRITE( 825, '(A)' ) "% Time (in second) spent in met'//
-     &            ' forcing subroutines."
+          WRITE( 825, '(A)' ) '% Time (in second) spent in met'//
+     &            ' forcing subroutines.'
           WRITE( 825, '(A,I5)') '% NWS = ', NWS
           IF ( NWS == 14 ) THEN
              WRITE( 825, '(A,L)') '% Use core 0 to read = ',
