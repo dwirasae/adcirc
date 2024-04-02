@@ -695,7 +695,10 @@ C******************************************************************************
 C......................................................................
       SUBROUTINE collect_run_wall_time( )
          USE SIZES, ONLY: MYPROC, MNPROC
+
+#ifdef CMPI         
          USE MESSENGER, ONLY : MSG_RScalar_Reduce
+#endif
 
          IMPLICIT NONE
 
