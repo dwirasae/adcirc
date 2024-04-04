@@ -545,6 +545,8 @@ C******************************************************************************
 #ifdef CMPI
       USE MESSENGER, ONLY : msg_fini
 #endif
+      USE SIZES, ONLY : mnproc, mnwproc, mnwproh, myproc
+
       IMPLICIT NONE
 C
       LOGICAL, OPTIONAL :: NO_MPI_FINALIZE
@@ -557,6 +559,8 @@ C
 #if defined(ADCIRC_TRACE) || defined(ALL_TRACE)
       call allMessage(DEBUG,"Enter.")
 #endif
+
+
 
 #ifdef CMPI
       start_time = MPI_Wtime() ; 
@@ -577,8 +581,10 @@ C
       total_wtime = total_Wtime + 
      &              (end_total_wtime - start_total_wtime) 
 
-      !
-      CALL collect_run_wall_time()
+      if ( myproc < mnproc) then
+        !
+        CALL collect_run_wall_time()
+      end if  
 
 #ifdef CMPI
       IF (PRESENT(NO_MPI_FINALIZE)) THEN
