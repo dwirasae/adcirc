@@ -270,6 +270,9 @@ C
       logical :: grb2flag
       integer :: NT, NTC
 #endif
+
+      logical:: read_NWS14_using_core_0 = .true. ! read NWS14 (grib2,netcdf) from a computed core 0
+ 
       real(8) :: wtime1_12 ! time associated with previous met dataset
       real(8) :: wtime2_12 ! time associated with new met dataset
       real(8) :: wtiminc_12 ! time increment between met datasets (seconds)
